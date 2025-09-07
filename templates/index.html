@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help Desk Ticket Management System</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            padding-top: 2rem;
+            background-color: #f8f9fa;
+        }
+        .ticket-card {
+            margin-bottom: 1rem;
+            transition: transform 0.2s;
+        }
+        .ticket-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .priority-high {
+            border-left: 5px solid #dc3545;
+        }
+        .priority-medium {
+            border-left: 5px solid #ffc107;
+        }
+        .priority-low {
+            border-left: 5px solid #28a745;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+        }
+        .status-open {
+            background-color: #28a745;
+        }
+        .status-in_progress {
+            background-color: #ffc107;
+        }
+        .status-closed {
+            background-color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="pb-3 mb-4 border-bottom">
+            <div class="d-flex align-items-center text-dark">
+                <span class="fs-4">Help Desk Ticket Management System</span>
+            </div>
+        </header>
+
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Create New Ticket</h5>
+                        <form id="ticketForm">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Title</label>
+                                <input type="text" class="form-control" id="title" required minlength="3" maxlength="100">
+                            </div>
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <textarea class="form-control" id="description" rows="3" required minlength="10"></textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="status" class="form-label">Status</label>
+                                    <select class="form-select" id="status">
+                                        <option value="open" selected>Open</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="closed">Closed</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="priority" class="form-label">Priority</label>
+                                    <select class="form-select" id="priority">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <h3>Tickets</h3>
+                <div id="ticketsList" class="row">
+                    <!-- Tickets will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticket Detail Modal -->
+    <div class="modal fade" id="ticketModal" tabindex="-1" aria-labelledby="ticketModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ticketModalLabel">Ticket Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="ticketModalBody">
+                    <!-- Ticket details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-danger" id="deleteTicketBtn">Delete</button>
+                    <button type="button" class="btn btn-primary" id="editTicketBtn">Edit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // API URL
+        const API_URL = '/api/tickets';
+        let currentTicketId = null;
+
+        // DOM Elements
+        const ticketsList = document.getElementById('ticketsList');
+        const ticketForm = document.getElementById('ticketForm');
+        const ticketModal = new bootstrap.Modal(document.getElementById('ticketModal'));
+        const deleteTicketBtn = document.getElementById('deleteTicketBtn');
+        const editTicketBtn = document.getElementById('editTicketBtn');
+
+        // Load all tickets
+        function loadTickets() {
+            fetch(API_URL)
+                .then(response => response.json())
+                .then(tickets => {
+                    ticketsList.innerHTML = '';
+                    if (tickets.length === 0) {
+                        ticketsList.innerHTML = '<div class="col-12"><p>No tickets found. Create a new ticket to get started.</p></div>';
+                        return;
+                    }
+                    
+                    tickets.forEach(ticket => {
+                        const ticketCard = document.createElement('div');
+                        ticketCard.className = `col-md-4 mb-3`;
+                        ticketCard.innerHTML = `
+                            <div class="card ticket-card priority-${ticket.priority}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h5 class="card-title mb-0">${ticket.title}</h5>
+                                        <span class="badge status-${ticket.status} status-badge">${formatStatus(ticket.status)}</span>
+                                    </div>
+                                    <p class="card-text">${ticket.description.substring(0, 100)}${ticket.description.length > 100 ? '...' : ''}</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">Priority: ${formatPriority(ticket.priority)}</small>
+                                        <button class="btn btn-sm btn-outline-primary view-ticket" data-id="${ticket.id}">View Details</button>
+                                    </div>
+                                </div>
+                                <div class="card-footer text-muted">
+                                    <small>Created: ${formatDate(ticket.created_at)}</small>
+                                </div>
+                            </div>
+                        `;
+                        ticketsList.appendChild(ticketCard);
+                    });
+
+                    // Add event listeners to view buttons
+                    document.querySelectorAll('.view-ticket').forEach(button => {
+                        button.addEventListener('click', () => viewTicket(button.dataset.id));
+                    });
+                })
+                .catch(error => console.error('Error loading tickets:', error));
+        }
+
+        // Create a new ticket
+        ticketForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const ticketData = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                status: document.getElementById('status').value,
+                priority: document.getElementById('priority').value
+            };
+
+            fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(ticketData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                ticketForm.reset();
+                loadTickets();
+                alert('Ticket created successfully!');
+            })
+            .catch(error => {
+                console.error('Error creating ticket:', error);
+                alert('Error creating ticket: ' + JSON.stringify(error));
+            });
+        });
+
+        // View ticket details
+        function viewTicket(id) {
+            currentTicketId = id;
+            
+            fetch(`${API_URL}/${id}`)
+                .then(response => response.json())
+                .then(ticket => {
+                    const modalBody = document.getElementById('ticketModalBody');
+                    modalBody.innerHTML = `
+                        <div class="mb-3">
+                            <h5>${ticket.title}</h5>
+                            <span class="badge status-${ticket.status} status-badge">${formatStatus(ticket.status)}</span>
+                            <span class="badge bg-secondary">${formatPriority(ticket.priority)}</span>
+                        </div>
+                        <div class="mb-3">
+                            <p>${ticket.description}</p>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Created: ${formatDate(ticket.created_at)}</small>
+                            <small class="text-muted">Updated: ${formatDate(ticket.updated_at)}</small>
+                        </div>
+                    `;
+                    ticketModal.show();
+                })
+                .catch(error => console.error('Error loading ticket details:', error));
+        }
+
+        // Delete ticket
+        deleteTicketBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to delete this ticket?')) {
+                fetch(`${API_URL}/${currentTicketId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    ticketModal.hide();
+                    loadTickets();
+                    alert('Ticket deleted successfully!');
+                })
+                .catch(error => console.error('Error deleting ticket:', error));
+            }
+        });
+
+        // Edit ticket
+        editTicketBtn.addEventListener('click', function() {
+            fetch(`${API_URL}/${currentTicketId}`)
+                .then(response => response.json())
+                .then(ticket => {
+                    document.getElementById('title').value = ticket.title;
+                    document.getElementById('description').value = ticket.description;
+                    document.getElementById('status').value = ticket.status;
+                    document.getElementById('priority').value = ticket.priority;
+                    
+                    ticketModal.hide();
+                    window.scrollTo(0, 0);
+                    
+                    // Change form submit behavior to update
+                    const originalSubmitHandler = ticketForm.onsubmit;
+                    ticketForm.onsubmit = function(e) {
+                        e.preventDefault();
+                        
+                        const ticketData = {
+                            title: document.getElementById('title').value,
+                            description: document.getElementById('description').value,
+                            status: document.getElementById('status').value,
+                            priority: document.getElementById('priority').value
+                        };
+
+                        fetch(`${API_URL}/${currentTicketId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(ticketData)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            ticketForm.reset();
+                            loadTickets();
+                            alert('Ticket updated successfully!');
+                            
+                            // Restore original submit handler
+                            ticketForm.onsubmit = originalSubmitHandler;
+                        })
+                        .catch(error => console.error('Error updating ticket:', error));
+                    };
+                })
+                .catch(error => console.error('Error loading ticket for edit:', error));
+        });
+
+        // Helper functions
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        function formatStatus(status) {
+            return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function formatPriority(priority) {
+            return priority.charAt(0).toUpperCase() + priority.slice(1);
+        }
+
+        // Load tickets on page load
+        document.addEventListener('DOMContentLoaded', loadTickets);
+    </script>
+</body>
+</html>
